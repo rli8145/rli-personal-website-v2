@@ -1,1 +1,3 @@
-python3 -m http.server 8000 then visit http://localhost:8000
+Static personal portfolio website styled after a topographic map of Vancouver's North Shore.
+
+**Live**: https://www.ryan-li.ca/
