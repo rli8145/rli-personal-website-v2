@@ -427,7 +427,7 @@
   const trailSvg = document.getElementById("trail");
   const hikerSvg = document.getElementById("hiker");
   const SVG_NS = "http://www.w3.org/2000/svg";
-  const WALK_U = 2.1;        // walker scale: sprite units → px
+  const WALK_U = 2.6;        // walker scale: sprite units → px
   const NAV_MIN_SPEED = 210; // px/s when sent to a station…
   const NAV_MAX_MS = 1700;   // …but never longer than this
   const HOME_STATION = 4;    // Stanley Park · About Me
