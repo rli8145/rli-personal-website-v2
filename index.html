@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ryan Li - Coast Mountains Survey</title>
+<meta name="description" content="Ryan Li - cs + math @ uwaterloo. Navigate by summit.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%23F2762E' d='M8 2 14 13H2z'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Serif:ital@1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<main class="sheet">
+
+  <!-- ── The map ─────────────────────────────────────────── -->
+  <div class="map" id="map" aria-label="Pixelated topographic map of the Vancouver North Shore mountains">
+    <canvas id="terrain"></canvas>
+    <canvas id="clouds" aria-hidden="true"></canvas>
+    <div class="graticule" aria-hidden="true"></div>
+    <svg class="trail" id="trail" aria-hidden="true"></svg>
+
+    <!-- Hydrography + region labels (cartographic: water is italic) -->
+    <div class="map-labels" aria-hidden="true">
+      <span class="lbl lbl-water" style="--x:2.5%; --y:21%; --r:67deg">Howe Sound</span>
+      <span class="lbl lbl-water" style="--x:39%; --y:58.5%; --r:-1deg">Burrard Inlet</span>
+      <span class="lbl lbl-water lbl-water-sm" style="--x:13%; --y:66.5%; --r:-5deg">English Bay</span>
+      <span class="lbl lbl-water lbl-water-sm" style="--x:46%; --y:91.6%; --r:0deg">Fraser River</span>
+      <span class="lbl lbl-region" style="--x:52%; --y:7%;  --r:0deg">Pacific&nbsp;Ranges</span>
+      <span class="lbl lbl-city"   style="--x:38%; --y:77%; --r:0deg">Vancouver</span>
+      <span class="lbl lbl-city lbl-city-sm" style="--x:40%; --y:51.5%">North Vancouver</span>
+      <span class="lbl lbl-city lbl-city-sm" style="--x:15%; --y:53.5%">West Vancouver</span>
+    </div>
+
+    <!-- Survey stations: the navigation -->
+    <nav class="stations" aria-label="Site navigation - survey stations">
+      <button class="peak" data-panel="projects" data-side="top" style="--x:22%; --y:24%">
+        <span class="peak-tri" aria-hidden="true"></span>
+        <span class="peak-plate">
+          <span class="peak-name">The Lions</span>
+          <span class="peak-role">Projects</span>
+        </span>
+      </button>
+      <button class="peak" data-panel="experience" data-side="top" style="--x:44%; --y:31%">
+        <span class="peak-tri" aria-hidden="true"></span>
+        <span class="peak-plate">
+          <span class="peak-name">Grouse Mtn</span>
+          <span class="peak-role">Experience</span>
+        </span>
+      </button>
+      <button class="peak" data-panel="resume" data-side="top" style="--x:58%; --y:27%">
+        <span class="peak-tri" aria-hidden="true"></span>
+        <span class="peak-plate">
+          <span class="peak-name">Mt Seymour</span>
+          <span class="peak-role">Résumé</span>
+        </span>
+      </button>
+      <button class="peak" data-panel="contact" data-side="right" style="--x:76%; --y:40%">
+        <span class="peak-tri" aria-hidden="true"></span>
+        <span class="peak-plate">
+          <span class="peak-name">Eagle Mtn</span>
+          <span class="peak-role">Contact</span>
+        </span>
+      </button>
+      <button class="peak" data-panel="about" data-side="bottom" style="--x:29.8%; --y:64.5%">
+        <span class="peak-tri" aria-hidden="true"></span>
+        <span class="peak-plate">
+          <span class="peak-name">Stanley Park</span>
+          <span class="peak-role">About Me</span>
+        </span>
+      </button>
+    </nav>
+
+    <!-- hiker rides its own layer so plates never cover it -->
+    <svg class="trail" id="hiker" aria-hidden="true"></svg>
+  </div>
+
+  <!-- ── Sheet furniture ─────────────────────────────────── -->
+  <header class="bar bar-top">
+    <div class="bar-id">
+      <h1 class="site-name">Ryan Li</h1>
+      <span class="site-role">cs + math @ uwaterloo</span>
+    </div>
+    <div class="bar-sheet">
+      <span class="sheet-ref">Sheet 92 G/6</span>
+      <span class="compass" aria-hidden="true">N<span class="compass-tri"></span></span>
+    </div>
+  </header>
+
+  <!-- Live cursor readout (GIS-style) -->
+  <div class="readout" id="readout" aria-hidden="true">
+    <span id="ro-coords">49.32°N&nbsp;123.14°W</span>
+    <span id="ro-elev">EL -</span>
+  </div>
+
+  <footer class="bar bar-bottom">
+    <div class="scalebar" aria-hidden="true">
+      <span class="scale-segs"><i></i><i></i><i></i><i></i></span>
+      <span class="scale-lbl">2 km</span>
+    </div>
+    <nav class="bar-links" aria-label="External links">
+      <a href="https://github.com/rli8145" rel="me">GitHub</a>
+      <a href="https://linkedin.com/in/ryan-li-0bab58363/" rel="me">LinkedIn</a>
+      <a href="mailto:rr2li@uwaterloo.ca">Email</a>
+    </nav>
+  </footer>
+
+  <!-- ── Field report drawer ─────────────────────────────── -->
+  <aside class="drawer" id="drawer" role="dialog" aria-modal="false" aria-labelledby="drawer-title" hidden>
+    <header class="drawer-head">
+      <h2 class="drawer-title" id="drawer-title">-</h2>
+      <button class="drawer-close" id="drawer-close" aria-label="Close panel">×</button>
+    </header>
+
+    <section class="panel" data-panel="projects">
+      <p class="panel-intro">Some stuff I've built lately.</p>
+      <article class="entry">
+        <h3><a href="https://github.com/rli8145/alphahex" target="_blank" rel="noopener noreferrer">AlphaHex - Catan Engine</a></h3>
+        <p>MCTS engine for 1v1 Catan - top 500 online rank on <a href="https://colonist.io/" target="_blank" rel="noopener noreferrer">colonist.io</a> with a 70% win rate.</p>
+        <p class="entry-meta">Python · PyTorch · Modal</p>
+      </article>
+      <article class="entry">
+        <h3><a href="https://github.com/jweng121/slotify" target="_blank" rel="noopener noreferrer">Slotify (UofTHacks Winner)</a></h3>
+        <p>Dynamically inserts targeted advertisements into audio streams in real-time.</p>
+        <p class="entry-meta">Node.js · React · ElevenLabs API · Pydub · FFmpeg</p>
+      </article>
+      <article class="entry">
+        <h3><a href="https://github.com/rli8145/tiling-combinatorics" target="_blank" rel="noopener noreferrer">2xN Tiling Library</a></h3>
+        <p>Computational companion to original paper exploring tiling combinatorics via generating functions.</p>
+        <p class="entry-meta">C++ · SymPy · mpmath</p>
+      </article>
+      <article class="entry">
+        <h3><a href=" https://github.com/rli8145/ml" target="_blank" rel="noopener noreferrer">ML Foundations</a></h3>
+        <p>Mini GPT from scratch - transformers, autograd, and more.</p>
+        <p class="entry-meta">Python · NumPy · PyTorch</p>
+      </article>
+      <article class="entry">
+        <h3><a href="https://github.com/danielkwan-dev/golden-age" target="_blank" rel="noopener noreferrer">Midas (QHacks)</a></h3>
+        <p>Augmented reality application that guides users through device repairs step-by-step.</p>
+        <p class="entry-meta">YOLOv11n · OpenCV · GPT-4o Vision · OpenAI Whisper API</p>
+      </article>
+      <article class="entry">
+        <h3><a href="https://github.com/rli8145/reed-solomon" target="_blank" rel="noopener noreferrer">Reed-Solomon</a></h3>
+        <p>Implementation of Reed-Solomon error-correcting codes over finite fields, with two decoding algorithms - Berlekamp-Welch and Euclidean.</p>
+        <p class="entry-meta">C++ · GMP · Google Test · matplotlib</p>
+      </article>
+      <article class="entry">
+        <h3><a href="https://github.com/rli8145/weather-playlist-generator" target="_blank" rel="noopener noreferrer">forecast-fm</a></h3>
+        <p>Classifies user-inputted songs and generates weather-based Spotify playlists using random forests and gradient boosted trees.</p>
+        <p class="entry-meta">React · scikit-learn · Spotify Web API · ReccoBeats API</p>
+      </article>
+      <article class="entry">
+        <h3><a href="https://github.com/rli8145/MITEC-Array-Technologies" target="_blank" rel="noopener noreferrer">OptiCO2 (MIT Energy and Climate Hacks)</a></h3>
+        <p>B2B dashboard optimizing cost-emission tradeoffs in steel manufacturing supply chains.</p>
+        <p class="entry-meta">Next.js · D3.js · FastAPI · pandas</p>
+      </article>
+    </section>
+
+    <section class="panel" data-panel="experience">
+      <article class="entry">
+        <h3>Software Engineer Intern · <a href="https://www.canada.ca/en/environment-climate-change.html" target="_blank" rel="noopener noreferrer">Environment and Climate Change Canada</a></h3>
+        <p class="entry-meta">Current</p>
+        <p>Hydrometric data systems at Canada's federal environment department.</p>
+      </article>
+      <article class="entry">
+        <h3>Machine Learning Engineer · <a href="https://watai.ca/" target="_blank" rel="noopener noreferrer">WAT.ai</a></h3>
+        <p class="entry-meta">Current</p>
+        <p>VLMs for <a href="https://github.com/chefOST" target="_blank" rel="noopener noreferrer">object-state tracking in cooking videos</a>.</p>
+      </article>
+      <article class="entry">
+        <h3>Quantitative Developer · <a href="https://www.linkedin.com/company/wat-street/?originalSubdomain=ca" target="_blank" rel="noopener noreferrer">Wat Street</a></h3>
+        <p class="entry-meta">Dec 2025 - Jul 2026</p>
+        <p>Classifiers for intraday trend continuation following flag patterns.</p>
+      </article>
+      <article class="entry">
+        <h3>Data Analyst Intern · <a href="https://team.sites.olt.ubc.ca/" target="_blank" rel="noopener noreferrer">UBC TEAM</a></h3>
+        <p class="entry-meta">Jun - Aug 2024</p>
+        <p>Data standardization and visualization at UBC's Timber Engineering and Applied Mechanics Lab.</p>
+      </article>
+    </section>
+
+    <section class="panel" data-panel="resume">
+      <article class="entry">
+        <p><a class="button" href="https://ryan-li.ca/Resume_cur.pdf" target="_blank" rel="noopener noreferrer">View résumé - PDF</a></p>
+        <p class="entry-meta">Last Updated: July 2026</p>
+      </article>
+    </section>
+
+    <section class="panel" data-panel="about">
+      <article class="entry">
+        <p>Currently a software engineer intern at <a href="https://www.canada.ca/en/environment-climate-change.html" target="_blank" rel="noopener noreferrer">Environment and Climate Change Canada</a> and a machine learning engineer at <a href="https://watai.ca/" target="_blank" rel="noopener noreferrer">WAT.ai</a>. In my free time I enjoy:</p>
+        <ul class="interests-list">
+          <li>building end-to-end projects</li>
+          <li>tackling hard math problems</li>
+          <li>playing poker (NLH)</li>
+          <li>going on hikes</li>
+          <li>playing golf (handicap confidential)</li>
+          <li>good books, <a href="https://letterboxd.com/rli8145/" target="_blank" rel="noopener noreferrer">movies</a>, and <a href="https://open.spotify.com/user/ryanli-nz" target="_blank" rel="noopener noreferrer">music</a></li>
+        </ul>
+        <p>I'm always open to discussing new opportunities and ideas; please feel free to <a href="mailto:rr2li@uwaterloo.ca">reach out</a>!</p>
+      </article>
+    </section>
+
+    <section class="panel" data-panel="contact">
+      <article class="entry">
+        <p>I'm always open to discussing new opportunities and ideas; please feel free to reach out.</p>
+        <p class="entry-meta"><a href="https://github.com/rli8145" target="_blank" rel="noopener noreferrer">GitHub</a> · <a href="https://linkedin.com/in/ryan-li-0bab58363/" target="_blank" rel="noopener noreferrer">LinkedIn</a> · <a href="mailto:rr2li@uwaterloo.ca">Email</a></p>
+      </article>
+    </section>
+  </aside>
+
+</main>
+
+<script src="main.js"></script>
+</body>
+</html>

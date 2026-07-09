@@ -1,0 +1,516 @@
+/* ── Ryan Li · Coast Mountains Survey ─────────────────────────
+   Palette: hypsometric tints (inlet blue → rainforest → granite
+   → snow) with surveyor's flagging-tape orange as sole accent. */
+
+:root {
+  --ink: #071a1f;            /* deepest water / chart ink        */
+  --bone: #e9efe4;           /* snow / lettering                 */
+  --bone-dim: #a8b5a6;
+  --flag: #f2762e;           /* flagging-tape orange             */
+  --forest: #3a6c49;
+  --water: #16505a;
+  --panel: rgba(7, 21, 25, 0.88);
+  --line: rgba(233, 239, 228, 0.28);
+
+  --font-px: "Silkscreen", monospace;
+  --font-mono: "IBM Plex Mono", monospace;
+  --font-water: "Instrument Serif", serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+
+body {
+  background: var(--ink);
+  color: var(--bone);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.55;
+  overflow: hidden;
+}
+
+::selection { background: var(--flag); color: var(--ink); }
+
+a { color: var(--bone); text-decoration-color: var(--flag); text-underline-offset: 3px; }
+a:hover { color: var(--flag); }
+
+:focus-visible {
+  outline: 2px solid var(--flag);
+  outline-offset: 2px;
+}
+
+.sheet { position: fixed; inset: 0; }
+
+/* ── Map ─────────────────────────────────────────────────── */
+
+.map { position: absolute; inset: 0; cursor: crosshair; }
+
+.map canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+#clouds { pointer-events: none; }
+
+.graticule {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    repeating-linear-gradient(to right,  var(--line) 0 1px, transparent 1px 12.5%),
+    repeating-linear-gradient(to bottom, var(--line) 0 1px, transparent 1px 16.6667%);
+  opacity: 0.14;
+}
+
+/* ── Trail + walker ──────────────────────────────────────── */
+
+.trail {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  animation: fade-in 0.4s steps(3) both;
+  animation-delay: 1.9s;
+}
+
+.trail-line {
+  fill: none;
+  stroke: var(--flag);
+  stroke-width: 3;
+  stroke-dasharray: 3 7; /* square dots, pixel-style */
+  opacity: 0.75;
+}
+
+.walker { filter: drop-shadow(1px 1px 0 rgba(7, 26, 31, 0.8)); }
+
+/* ── Water & region labels ───────────────────────────────── */
+
+.map-labels { position: absolute; inset: 0; pointer-events: none; }
+
+.lbl {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  transform: rotate(var(--r, 0deg));
+  transform-origin: left center;
+  white-space: nowrap;
+}
+
+.lbl-water {
+  font-family: var(--font-water);
+  font-style: italic;
+  font-size: 13px;
+  letter-spacing: 0.10em;
+  color: rgba(233, 244, 244, 0.60);
+  text-shadow: 0 1px 0 rgba(7, 26, 31, 0.6);
+}
+
+.lbl-region {
+  font-family: var(--font-water);
+  font-style: italic;
+  font-size: 15px;
+  letter-spacing: 0.55em;
+  text-transform: uppercase;
+  color: rgba(233, 239, 228, 0.34);
+}
+
+/* -sm marks minor water labels; hidden on small screens below */
+.lbl-water-sm {}
+
+.lbl-city {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: rgba(233, 239, 228, 0.5);
+}
+
+.lbl-city-sm {
+  font-size: 9px;
+  letter-spacing: 0.26em;
+  color: rgba(233, 239, 228, 0.38);
+}
+
+.lbl-park {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.20em;
+  text-transform: uppercase;
+  color: rgba(190, 219, 186, 0.60);
+  text-shadow: 0 1px 0 rgba(7, 26, 31, 0.55);
+}
+
+/* ── Survey stations (nav) ───────────────────────────────── */
+
+.peak {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  color: inherit;
+  padding: 8px;
+  animation: station-in 0.5s steps(4) both;
+  animation-delay: var(--in-delay, 1.5s);
+}
+
+.peak-tri {
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-bottom: 13px solid var(--flag);
+  filter: drop-shadow(2px 2px 0 rgba(7, 26, 31, 0.7));
+  transition: transform 0.12s steps(2);
+}
+
+/* plates float off the trail; the triangle stays on the anchor */
+.peak-plate {
+  position: absolute;
+  width: max-content;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  background: var(--panel);
+  border: 2px solid var(--bone);
+  box-shadow: 3px 3px 0 rgba(7, 26, 31, 0.65);
+  padding: 5px 9px 4px;
+}
+
+.peak[data-side="top"] .peak-plate {
+  bottom: calc(100% + 1px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.peak[data-side="bottom"] .peak-plate {
+  top: calc(100% + 1px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.peak[data-side="right"] .peak-plate {
+  left: calc(100% + 1px);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.peak[data-side="left"] .peak-plate {
+  right: calc(100% + 1px);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.peak-name {
+  font-family: var(--font-px);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.peak-role {
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--bone-dim);
+}
+
+.peak:hover .peak-tri,
+.peak:focus-visible .peak-tri { transform: scale(1.35); }
+
+.peak:hover .peak-plate,
+.peak:focus-visible .peak-plate { border-color: var(--flag); }
+
+.peak:hover .peak-role,
+.peak:focus-visible .peak-role { color: var(--flag); }
+
+.peak[aria-expanded="true"] .peak-plate { border-color: var(--flag); }
+.peak[aria-expanded="true"] .peak-role { color: var(--flag); }
+
+/* the hiker pushing the summit marker */
+.peak.pressed .peak-tri { transform: scale(0.6); }
+
+@keyframes station-in {
+  from { opacity: 0; transform: translate(-50%, -30%); }
+  to   { opacity: 1; transform: translate(-50%, -50%); }
+}
+
+/* ── Sheet furniture: bars ───────────────────────────────── */
+
+.bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 18px;
+  background: var(--panel);
+  z-index: 4;
+}
+
+.bar-top { top: 0; border-bottom: 2px solid var(--bone); }
+.bar-bottom { bottom: 0; border-top: 2px solid var(--bone); }
+
+.bar-id { display: flex; align-items: baseline; gap: 12px; }
+
+.site-name {
+  font-family: var(--font-px);
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.site-role {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--bone-dim);
+}
+
+.bar-sheet { display: flex; align-items: center; gap: 14px; }
+
+.sheet-ref {
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--bone-dim);
+}
+
+.compass {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: var(--font-px);
+  font-size: 10px;
+  line-height: 1;
+  gap: 2px;
+}
+
+.compass-tri {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 8px solid var(--bone);
+}
+
+/* footer */
+
+.scalebar { display: flex; align-items: center; gap: 8px; }
+
+.scale-segs { display: flex; border: 1px solid var(--bone); }
+.scale-segs i { width: var(--seg-px, 22px); height: 7px; background: var(--bone); } /* 500 m per segment, set by JS */
+.scale-segs i:nth-child(even) { background: transparent; }
+
+.scale-lbl {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--bone-dim);
+}
+
+.bar-links { display: flex; gap: 18px; }
+
+.bar-links a {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* ── Cursor readout ──────────────────────────────────────── */
+
+.readout {
+  position: absolute;
+  left: 18px;
+  bottom: 58px;
+  display: flex;
+  gap: 14px;
+  padding: 7px 11px;
+  background: var(--panel);
+  border: 2px solid var(--bone);
+  box-shadow: 4px 4px 0 rgba(7, 26, 31, 0.65);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+  z-index: 3;
+  animation: fade-in 0.4s steps(3) both;
+  animation-delay: 1.7s;
+}
+
+#ro-elev { color: var(--flag); min-width: 74px; text-align: right; }
+
+/* ── Field report drawer ─────────────────────────────────── */
+
+.drawer {
+  position: absolute;
+  right: 18px;
+  bottom: 58px;
+  width: min(420px, calc(100vw - 36px));
+  max-height: min(56vh, calc(100vh - 140px));
+  background: rgba(7, 21, 25, 0.95);
+  backdrop-filter: blur(3px);
+  border: 2px solid var(--bone);
+  box-shadow: 4px 4px 0 rgba(7, 26, 31, 0.65);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  opacity: 0;
+  transform: translateY(14px);
+  transition: transform 0.22s steps(6), opacity 0.22s steps(6);
+}
+
+.drawer.open { opacity: 1; transform: translateY(0); }
+
+.drawer-head {
+  position: sticky;
+  top: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px 12px;
+  border-bottom: 2px solid var(--line);
+  background: rgba(7, 21, 25, 0.95);
+  z-index: 1;
+}
+
+.drawer-title {
+  font-family: var(--font-px);
+  font-size: 18px;
+  text-transform: uppercase;
+  line-height: 1.2;
+}
+
+.drawer-close {
+  background: none;
+  border: 2px solid var(--bone);
+  color: var(--bone);
+  font-family: var(--font-px);
+  font-size: 14px;
+  line-height: 1;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  flex: none;
+}
+
+.drawer-close:hover { border-color: var(--flag); color: var(--flag); }
+
+.panel { display: none; padding: 18px 22px 28px; }
+.panel.active { display: block; }
+
+.panel-intro {
+  font-size: 12px;
+  color: var(--bone-dim);
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 6px;
+}
+
+.entry { padding: 14px 0; border-bottom: 1px solid var(--line); }
+.entry:last-child { border-bottom: none; }
+
+.entry h3 {
+  font-family: var(--font-px);
+  font-weight: 400;
+  font-size: 12px;
+  text-transform: uppercase;
+  margin-bottom: 5px;
+}
+
+.entry h3 a { text-decoration: none; border-bottom: 2px solid var(--flag); }
+.entry h3 a:hover { color: var(--flag); }
+
+.entry p { font-size: 12.5px; color: var(--bone-dim); }
+.entry p + p { margin-top: 5px; }
+
+.interests-list {
+  list-style: none;
+  margin: 8px 0;
+  display: grid;
+  gap: 4px;
+}
+
+.interests-list li {
+  position: relative;
+  padding-left: 16px;
+  font-size: 12.5px;
+  color: var(--bone-dim);
+}
+
+.interests-list li::before {
+  content: "▸";
+  position: absolute;
+  left: 0;
+  color: var(--flag);
+}
+
+.entry-meta {
+  font-size: 10.5px !important;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(168, 181, 166, 0.7) !important;
+}
+
+.button {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 8px 14px;
+  border: 2px solid var(--flag);
+  color: var(--flag);
+  font-family: var(--font-px);
+  font-size: 10px;
+  text-transform: uppercase;
+  text-decoration: none;
+  box-shadow: 3px 3px 0 rgba(7, 26, 31, 0.65);
+}
+
+.button:hover { background: var(--flag); color: var(--ink); }
+
+/* ── Responsive ──────────────────────────────────────────── */
+
+@media (max-width: 720px) {
+  .sheet-ref, .lbl-region { display: none; }
+  .lbl-water-sm, .lbl-city-sm, .lbl-park { display: none; }
+  .readout { display: none; }
+  .drawer { right: 12px; bottom: 52px; width: calc(100vw - 24px); }
+  .bar { padding: 8px 12px; }
+  .site-name { font-size: 14px; }
+  .site-role { font-size: 9px; letter-spacing: 0.14em; }
+  .lbl-water { font-size: 11px; }
+  .peak-name { font-size: 9px; }
+  .peak-role { font-size: 8px; }
+}
+
+/* ── Reduced motion ──────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .peak, .readout, .trail { animation: none; }
+  .drawer { transition: none; }
+  .peak-tri { transition: none; }
+}
