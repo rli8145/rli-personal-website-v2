@@ -337,9 +337,9 @@
       for (let i = 0; i < cols; i++) {
         const u = (i / cols) * aspect;
         const n = fbm(u * 1.6 + t * 90, v * 1.6 + t * 55, 3);
-        if (n > 0.54) {
+        if (n > 0.56) {
           const o = (j * cols + i) * 4;
-          px[o + 3] = Math.min(60, (n - 0.54) * 430);
+          px[o + 3] = Math.min(60, (n - 0.56) * 430);
         }
       }
     }
