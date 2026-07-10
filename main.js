@@ -555,6 +555,7 @@
   let jumpT0 = -1;
   let navTarget = null, navSpeed = NAV_MIN_SPEED, navRemaining = 0; // {btn, idx}
   let standingIdx = HOME_STATION;
+  let departIdx = -1; // station whose plate the current trip set off from
 
   // current journey, kept in map fractions so it survives resize
   let routeNodes = [STATION_NODES[HOME_STATION]];
@@ -593,7 +594,7 @@
 
   // Assemble the journey path: an optional off-node start point
   // (rerouted mid-walk), then the route's edges strung together
-  function setJourney(nodes, prefix) {
+  function setJourney(nodes, prefix, end) {
     routeNodes = nodes;
     pathPts = []; pathFlags = []; routeWpIdx = [];
     if (prefix) { pathPts.push(prefix); pathFlags.push(false); }
@@ -608,6 +609,7 @@
       pathPts.push(NODES[B]); pathFlags.push(!!e.straight);
       routeWpIdx.push(pathPts.length - 1);
     }
+    if (end) pathPts[pathPts.length - 1] = end;
     rebuildPath();
   }
 
@@ -624,26 +626,59 @@
     renderWalker(0);
   }
 
+  // where the hiker perches on the standing station's plate:
+  // on the label face, in its top-left quadrant
+  const PERCH_X = 0.2;  // feet, as a fraction of plate width from the left
+  const PERCH_Y = 0.25; // feet, as a fraction of plate height from the top
+  const STEP_UP = 26;   // final px of the walk spent stepping up onto it
+  function platePerch(idx, groundX, groundY) {
+    const r = peakBtns[idx].querySelector(".peak-plate").getBoundingClientRect();
+    return {
+      dx: r.left + r.width * PERCH_X - groundX,
+      dy: groundY - (r.top + r.height * PERCH_Y), // negative = step down onto it
+    };
+  }
+
   function renderWalker(now) {
+    const p = trailPath.getPointAtLength(walkDist);
     let jumpY = 0;
+    // he steps down off the plate over the first stretch of a trip
+    // and up onto the next one over the last stretch, so the
+    // arrival hop starts and lands on the same perch spot
+    let liftK = 1, perchIdx = standingIdx; // fraction of the perch offset
+    if (navTarget) {
+      // ramp runway grows with walk speed so the step on/off the
+      // plate always takes ~150ms, however long the trip
+      const stepPx = Math.max(STEP_UP, navSpeed * 0.15);
+      if (navRemaining < stepPx) {
+        liftK = 1 - navRemaining / stepPx; perchIdx = navTarget.idx;
+      } else if (departIdx >= 0 && walkDist < stepPx) {
+        liftK = 1 - walkDist / stepPx; perchIdx = departIdx;
+      } else liftK = 0;
+    }
     if (jumpT0 >= 0) {
       const t = (now - jumpT0) / JUMP_MS;
       if (t >= 1) jumpT0 = -1;
       else if (t > 0) {
-        // two hops: full-height bounce, then a small settle bounce
+        // two hops in place: full-height bounce, then a small settle
         const h = t < 0.62
           ? Math.sin((Math.PI * t) / 0.62) * JUMP_H
           : Math.sin((Math.PI * (t - 0.62)) / 0.38) * JUMP_H * 0.35;
         jumpY = Math.round(h) * WALK_U; // whole sprite pixels
       }
     }
+    let perchX = 0, perchY = 0;
+    if (liftK) {
+      const perch = platePerch(perchIdx, p.x, p.y);
+      perchX = liftK * perch.dx;
+      perchY = liftK * perch.dy;
+    }
     const striding =
       jumpY > 0 || (navTarget && Math.floor(now / 75) % 2 === 0);
     legsStride.setAttribute("visibility", striding ? "visible" : "hidden");
     legsStand.setAttribute("visibility", striding ? "hidden" : "visible");
-    const p = trailPath.getPointAtLength(walkDist);
     walker.setAttribute("transform",
-      `translate(${p.x} ${p.y - jumpY}) scale(${facing * WALK_U} ${WALK_U})`);
+      `translate(${p.x + perchX} ${p.y - jumpY - perchY}) scale(${facing * WALK_U} ${WALK_U})`);
   }
 
   // Click-to-navigate: route the hiker along the trail network,
@@ -679,10 +714,15 @@
     const fromX = prefix ? prefix[0] : NODES[nodes[0]][0];
     const dx = (NODES[target][0] - fromX) * innerWidth;
     if (Math.abs(dx) > 1) facing = dx > 0 ? 1 : -1;
-    setJourney(nodes, prefix);
+    // walk ends below the plate's perch corner, so the arrival
+    // leap goes straight up onto the label
+    const pr = btn.querySelector(".peak-plate").getBoundingClientRect();
+    const end = [(pr.left + pr.width * PERCH_X) / innerWidth, NODES[target][1]];
+    setJourney(nodes, prefix, end);
     walkDist = 0;
     navSpeed = Math.max(NAV_MIN_SPEED, trailLen / (NAV_MAX_MS / 1000));
     navRemaining = trailLen;
+    departIdx = navTarget ? -1 : standingIdx; // no step-down on a mid-walk reroute
     navTarget = { btn, idx };
     jumpT0 = -1; // re-routed mid-hop: back to walking
   }

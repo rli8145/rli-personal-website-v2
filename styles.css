@@ -168,19 +168,13 @@ a:hover { color: var(--flag); }
   animation-delay: var(--in-delay, 1.5s);
 }
 
-.peak-tri {
-  width: 0;
-  height: 0;
-  border-left: 8px solid transparent;
-  border-right: 8px solid transparent;
-  border-bottom: 13px solid var(--flag);
-  filter: drop-shadow(2px 2px 0 rgba(7, 26, 31, 0.7));
-  transition: transform 0.12s steps(2);
-}
-
-/* plates float off the trail; the triangle stays on the anchor */
+/* plates sit centered on the station anchor (nudge with --plate-dy);
+   the hiker steps up onto the label and perches there */
 .peak-plate {
   position: absolute;
+  top: calc(50% + var(--plate-dy, 0px));
+  left: 50%;
+  transform: translate(-50%, -50%);
   width: max-content;
   display: flex;
   flex-direction: column;
@@ -190,30 +184,7 @@ a:hover { color: var(--flag); }
   border: 2px solid var(--bone);
   box-shadow: 3px 3px 0 rgba(7, 26, 31, 0.65);
   padding: 5px 9px 4px;
-}
-
-.peak[data-side="top"] .peak-plate {
-  bottom: calc(100% + 1px);
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-.peak[data-side="bottom"] .peak-plate {
-  top: calc(100% + 1px);
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-.peak[data-side="right"] .peak-plate {
-  left: calc(100% + 1px);
-  top: 50%;
-  transform: translateY(-50%);
-}
-
-.peak[data-side="left"] .peak-plate {
-  right: calc(100% + 1px);
-  top: 50%;
-  transform: translateY(-50%);
+  transition: transform 0.12s steps(2);
 }
 
 .peak-role {
@@ -231,9 +202,6 @@ a:hover { color: var(--flag); }
   color: var(--bone-dim);
 }
 
-.peak:hover .peak-tri,
-.peak:focus-visible .peak-tri { transform: scale(1.35); }
-
 .peak:hover .peak-plate,
 .peak:focus-visible .peak-plate { border-color: var(--flag); }
 
@@ -243,8 +211,8 @@ a:hover { color: var(--flag); }
 .peak[aria-expanded="true"] .peak-plate { border-color: var(--flag); }
 .peak[aria-expanded="true"] .peak-role { color: var(--flag); }
 
-/* the hiker pushing the summit marker */
-.peak.pressed .peak-tri { transform: scale(0.6); }
+/* the hiker landing on the plate */
+.peak.pressed .peak-plate { transform: translate(-50%, -50%) translateY(2px); }
 
 @keyframes station-in {
   from { opacity: 0; transform: translate(-50%, -30%); }
@@ -370,7 +338,7 @@ a:hover { color: var(--flag); }
   right: 18px;
   bottom: 58px;
   width: min(420px, calc(100vw - 36px));
-  max-height: min(56vh, calc(100vh - 140px));
+  max-height: min(58vh, calc(100vh - 140px));
   background: rgba(7, 21, 25, 0.95);
   backdrop-filter: blur(3px);
   border: 2px solid var(--bone);
@@ -437,6 +405,7 @@ a:hover { color: var(--flag); }
 }
 
 .entry { padding: 14px 0; border-bottom: 1px solid var(--line); }
+.entry:first-child { padding-top: 0; } /* panel padding already covers it */
 .entry:last-child { border-bottom: none; }
 
 .entry h3 {
@@ -516,5 +485,5 @@ a:hover { color: var(--flag); }
 @media (prefers-reduced-motion: reduce) {
   .peak, .readout, .trail { animation: none; }
   .drawer { transition: none; }
-  .peak-tri { transition: none; }
+  .peak-plate { transition: none; }
 }
