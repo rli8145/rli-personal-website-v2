@@ -329,7 +329,7 @@
     requestAnimationFrame(clouds);
     if (!introDone || now - lastCloud < 40) return; // ~25 fps
     lastCloud = now;
-    const t = now * 0.000012;
+    const t = now * 0.000008;
     const img = cctx.createImageData(cols, rows);
     const px = img.data;
     for (let j = 0; j < rows; j++) {
