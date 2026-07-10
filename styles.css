@@ -379,10 +379,14 @@ a:hover { color: var(--flag); }
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  overscroll-behavior: none;
   opacity: 0;
   transform: translateY(14px);
   transition: transform 0.22s steps(6), opacity 0.22s steps(6);
 }
+
+.drawer[hidden] { display: none; }
+.drawer:not(.open) { pointer-events: none; }
 
 .drawer.open { opacity: 1; transform: translateY(0); }
 
