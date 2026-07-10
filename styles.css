@@ -216,14 +216,14 @@ a:hover { color: var(--flag); }
   transform: translateY(-50%);
 }
 
-.peak-name {
+.peak-role {
   font-family: var(--font-px);
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
-.peak-role {
+.peak-name {
   font-size: 9.5px;
   font-weight: 500;
   letter-spacing: 0.18em;
@@ -503,8 +503,8 @@ a:hover { color: var(--flag); }
   .site-name { font-size: 14px; }
   .site-role { font-size: 9px; letter-spacing: 0.14em; }
   .lbl-water { font-size: 11px; }
-  .peak-name { font-size: 9px; }
-  .peak-role { font-size: 8px; }
+  .peak-role { font-size: 9px; }
+  .peak-name { font-size: 8px; }
 }
 
 /* ── Reduced motion ──────────────────────────────────────── */
