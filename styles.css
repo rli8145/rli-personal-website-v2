@@ -79,11 +79,11 @@ a:hover { color: var(--flag); }
 }
 
 .trail-line {
+  /* invisible, but kept in the DOM: the hiker's position is
+     computed along this path with getPointAtLength() */
   fill: none;
-  stroke: var(--flag);
-  stroke-width: 3;
-  stroke-dasharray: 3 7; /* square dots, pixel-style */
-  opacity: 0.75;
+  stroke: none;
+  visibility: hidden;
 }
 
 .walker { filter: drop-shadow(1px 1px 0 rgba(7, 26, 31, 0.8)); }

@@ -402,7 +402,8 @@
       ev.stopPropagation();
       if (openBtn === btn) { closeDrawer(); return; }
       if (reduceMotion) {
-        walkDist = stationS[idx];
+        setJourney([STATION_NODES[idx]], null);
+        walkDist = 0;
         standingIdx = idx;
         renderWalker(0);
         openDrawer(btn);
@@ -421,8 +422,9 @@
   });
 
   // ── trail + walker ───────────────────────────────────────
-  // Dotted route linking the stations, walked end-to-end by a
-  // tiny pixel hiker who rests at each summit, then turns back.
+  // A trail network linking the stations, walked by a tiny pixel
+  // hiker who picks a sensible route for each trip: ridge trails
+  // between summits, and descents to whichever bridge suits.
 
   const trailSvg = document.getElementById("trail");
   const hikerSvg = document.getElementById("hiker");
@@ -432,45 +434,76 @@
   const NAV_MAX_MS = 1700;   // …but never longer than this
   const HOME_STATION = 4;    // Stanley Park · About Me
 
-  // Station anchors (order matches the .peak buttons in the DOM)
-  const STATIONS = [
-    [0.22, 0.24],   // The Lions
-    [0.44, 0.31],   // Grouse Mtn
-    [0.58, 0.27],   // Mt Seymour
-    [0.76, 0.40],   // Eagle Mtn
-    [0.298, 0.645], // Stanley Park
+  // Trail network (map fractions). Nodes are the five stations
+  // plus junctions at the bridge heads, so the hiker can route
+  // over the Lions Gate or the Second Narrows, whichever suits
+  // the trip. Every edge stays on land; `straight` marks bridge
+  // decks, walked as straight runs exactly on the drawn spans.
+  const NODES = {
+    lions:   [0.22, 0.24],
+    grouse:  [0.44, 0.31],
+    seymour: [0.58, 0.27],
+    eagle:   [0.76, 0.40],
+    stanley: [0.298, 0.645],
+    lgn:     [0.298, 0.534], // Lions Gate, north approach
+    sns:     [0.576, 0.616], // Second Narrows, south end
+    snn:     [0.583, 0.546], // Second Narrows, north end
+  };
+  // node per .peak button (DOM order)
+  const STATION_NODES = ["lions", "grouse", "seymour", "eagle", "stanley"];
+
+  const EDGES = [
+    { a: "lions", b: "grouse", via: [[0.295, 0.305], [0.365, 0.33]] }, // ridge
+    { a: "grouse", b: "seymour", via: [[0.505, 0.32]] },               // ridge
+    { a: "seymour", b: "eagle",  // around the head of Indian Arm
+      via: [[0.625, 0.262], [0.663, 0.218], [0.705, 0.27]] },
+    { a: "eagle", b: "sns",      // around Port Moody Arm, along the south shore
+      via: [[0.80, 0.52], [0.805, 0.60], [0.785, 0.655], [0.70, 0.662], [0.615, 0.648]] },
+    { a: "sns", b: "stanley",    // waterfront, through downtown
+      via: [[0.53, 0.66], [0.47, 0.655], [0.375, 0.657]] },
+    { a: "sns", b: "snn", straight: true, via: [] },                   // Second Narrows bridge
+    { a: "snn", b: "seymour", via: [[0.592, 0.47], [0.60, 0.38]] },    // down the Seymour slope
+    { a: "stanley", b: "lgn", straight: true,
+      via: [[0.298, 0.601], [0.298, 0.564]] },                         // Lions Gate bridge
+    { a: "lgn", b: "lions", via: [[0.26, 0.50], [0.225, 0.42]] },      // up through West Van
+    { a: "lgn", b: "grouse", via: [[0.335, 0.475], [0.40, 0.40]] },    // down Capilano
   ];
 
-  // Trail waypoints (map fractions): a closed loop that stays on
-  // land — over the summits, around the heads of Indian Arm and
-  // Port Moody Arm, west through the city to Stanley Park, and
-  // back across the Lions Gate Bridge (the only water crossing;
-  // the bridge points sit exactly on the drawn deck).
-  const ROUTE = [
-    [0.22, 0.24],   // The Lions
-    [0.295, 0.305],
-    [0.365, 0.33],
-    [0.44, 0.31],   // Grouse Mtn
-    [0.505, 0.32],
-    [0.58, 0.27],   // Mt Seymour
-    [0.625, 0.262],
-    [0.663, 0.218], // around the head of Indian Arm
-    [0.705, 0.27],
-    [0.76, 0.40],   // Eagle Mtn
-    [0.80, 0.52],
-    [0.805, 0.60],
-    [0.785, 0.655], // around the end of Port Moody Arm, well ashore
-    [0.70, 0.662],
-    [0.60, 0.66],
-    [0.47, 0.655],
-    [0.375, 0.657], // through downtown
-    [0.298, 0.645, 1], // Stanley Park (1 = straight run)
-    [0.298, 0.601, 1], // straight up over the Lions Gate Bridge…
-    [0.298, 0.564, 1],
-    [0.298, 0.534, 1],
-    [0.26, 0.50],   // West Vancouver
-    [0.225, 0.42],  // …and back up to The Lions
-  ];
+  function edgeLen(e) {
+    const pts = [NODES[e.a], ...e.via, NODES[e.b]];
+    let L = 0;
+    for (let i = 1; i < pts.length; i++) {
+      L += Math.hypot((pts[i][0] - pts[i - 1][0]) * innerWidth,
+                      (pts[i][1] - pts[i - 1][1]) * innerHeight);
+    }
+    return L;
+  }
+
+  // Shortest route between two nodes (Dijkstra over the tiny
+  // graph). Passing over another station's summit en route is
+  // penalized, so e.g. Seymour → Stanley descends to the Second
+  // Narrows instead of climbing over Grouse, but a real traverse
+  // like Lions → Eagle still walks the ridge.
+  function findRoute(from, to) {
+    const passPenalty = 0.1 * (innerWidth + innerHeight);
+    const dist = { [from]: 0 }, prev = {}, done = new Set();
+    for (;;) {
+      let u = null;
+      for (const k in dist) if (!done.has(k) && (u === null || dist[k] < dist[u])) u = k;
+      if (u === null || u === to) break;
+      done.add(u);
+      for (const e of EDGES) {
+        if (e.a !== u && e.b !== u) continue;
+        const v = e.a === u ? e.b : e.a;
+        const hop = STATION_NODES.includes(v) && v !== to ? passPenalty : 0;
+        const alt = dist[u] + edgeLen(e) + hop;
+        if (!(v in dist) || alt < dist[v]) { dist[v] = alt; prev[v] = u; }
+      }
+    }
+    const nodes = [to];
+    while (nodes[0] !== from) nodes.unshift(prev[nodes[0]]);
+    return { nodes, len: dist[to] };
+  }
 
   function svgRects(parts) {
     // parts: [[fill, [[x, y, w, h], …]], …]
@@ -509,83 +542,156 @@
   ]);
   walker.append(walkerBody, legsStand, legsStride);
 
-  let trailPath = null, trailLen = 0, stationS = [];
-  let walkDist = 0, walkDir = 1, lastWalk = 0;
-  let navTarget = null, navSpeed = NAV_MIN_SPEED, navRemaining = 0; // {btn, idx, s}
+  const trailPath = document.createElementNS(SVG_NS, "path");
+  trailPath.setAttribute("class", "trail-line");
+  const measurePath = document.createElementNS(SVG_NS, "path");
+  measurePath.setAttribute("visibility", "hidden");
+  trailSvg.append(trailPath, measurePath);
+  hikerSvg.append(walker);
+
+  let trailLen = 0;
+  let walkDist = 0, facing = 1, lastWalk = 0;
+  const JUMP_MS = 460, JUMP_H = 7; // arrival hop: big bounce + settle
+  let jumpT0 = -1;
+  let navTarget = null, navSpeed = NAV_MIN_SPEED, navRemaining = 0; // {btn, idx}
   let standingIdx = HOME_STATION;
 
-  function buildTrail() {
+  // current journey, kept in map fractions so it survives resize
+  let routeNodes = [STATION_NODES[HOME_STATION]];
+  let pathPts = [NODES[STATION_NODES[HOME_STATION]]], pathFlags = [false];
+  let routeWpIdx = [0];  // waypoint index of each route node
+  let nodeBreaks = [0];  // arc length at each route node
+
+  function rebuildPath() {
     const w = innerWidth, h = innerHeight;
-    trailSvg.setAttribute("viewBox", `0 0 ${w} ${h}`);
-    hikerSvg.setAttribute("viewBox", `0 0 ${w} ${h}`);
-    const pts = ROUTE.map(([x, y]) => [x * w, y * h]);
-    // closed Catmull-Rom loop; consecutive flagged waypoints
-    // (the bridge deck) are joined with straight lines instead
+    const pts = pathPts.map(([x, y]) => [x * w, y * h]);
     const N = pts.length;
+    // open Catmull-Rom through the waypoints; consecutive flagged
+    // waypoints (bridge decks) are joined with straight lines
     let d = `M ${pts[0][0]} ${pts[0][1]}`;
-    for (let n = 0; n < N; n++) {
-      const m = (n + 1) % N;
-      const p1 = pts[n], p2 = pts[m];
-      if (ROUTE[n][2] && ROUTE[m][2]) {
+    const dAt = [d]; // path prefix ending at each waypoint
+    for (let n = 0; n + 1 < N; n++) {
+      const p1 = pts[n], p2 = pts[n + 1];
+      if (pathFlags[n] && pathFlags[n + 1]) {
         d += ` L ${p2[0]} ${p2[1]}`;
-        continue;
+      } else {
+        const p0 = pts[Math.max(0, n - 1)], p3 = pts[Math.min(N - 1, n + 2)];
+        d += ` C ${p1[0] + (p2[0] - p0[0]) / 6} ${p1[1] + (p2[1] - p0[1]) / 6}` +
+             ` ${p2[0] - (p3[0] - p1[0]) / 6} ${p2[1] - (p3[1] - p1[1]) / 6}` +
+             ` ${p2[0]} ${p2[1]}`;
       }
-      const p0 = pts[(n + N - 1) % N], p3 = pts[(n + 2) % N];
-      d += ` C ${p1[0] + (p2[0] - p0[0]) / 6} ${p1[1] + (p2[1] - p0[1]) / 6}` +
-           ` ${p2[0] - (p3[0] - p1[0]) / 6} ${p2[1] - (p3[1] - p1[1]) / 6}` +
-           ` ${p2[0]} ${p2[1]}`;
+      dAt.push(d);
     }
-    if (!trailPath) {
-      trailPath = document.createElementNS(SVG_NS, "path");
-      trailPath.setAttribute("class", "trail-line");
-      trailSvg.append(trailPath);
-      hikerSvg.append(walker);
-    }
-    trailPath.setAttribute("d", d + " Z");
+    if (N === 1) d += ` L ${pts[0][0]} ${pts[0][1]}`; // standing still
+    trailPath.setAttribute("d", d);
     trailLen = trailPath.getTotalLength();
-
-    // arc length of each station along the loop
-    stationS = STATIONS.map(([x, y]) => [x * w, y * h]).map(([sx, sy]) => {
-      let best = 0, bestD = Infinity;
-      for (let s = 0; s < trailLen; s += trailLen / 900) {
-        const q = trailPath.getPointAtLength(s);
-        const dd = (q.x - sx) ** 2 + (q.y - sy) ** 2;
-        if (dd < bestD) { bestD = dd; best = s; }
-      }
-      return best;
+    nodeBreaks = routeWpIdx.map((i) => {
+      measurePath.setAttribute("d", dAt[i]);
+      return measurePath.getTotalLength();
     });
+  }
 
-    if (navTarget) sendHiker(navTarget.btn, navTarget.idx); // re-aim after resize
-    else walkDist = stationS[standingIdx]; // stand at the last station
+  // Assemble the journey path: an optional off-node start point
+  // (rerouted mid-walk), then the route's edges strung together
+  function setJourney(nodes, prefix) {
+    routeNodes = nodes;
+    pathPts = []; pathFlags = []; routeWpIdx = [];
+    if (prefix) { pathPts.push(prefix); pathFlags.push(false); }
+    pathPts.push(NODES[nodes[0]]); pathFlags.push(false);
+    routeWpIdx.push(pathPts.length - 1);
+    for (let i = 0; i + 1 < nodes.length; i++) {
+      const A = nodes[i], B = nodes[i + 1];
+      const e = EDGES.find((g) => (g.a === A && g.b === B) || (g.a === B && g.b === A));
+      const via = e.a === A ? e.via : e.via.slice().reverse();
+      if (e.straight) pathFlags[pathFlags.length - 1] = true;
+      for (const p of via) { pathPts.push(p); pathFlags.push(!!e.straight); }
+      pathPts.push(NODES[B]); pathFlags.push(!!e.straight);
+      routeWpIdx.push(pathPts.length - 1);
+    }
+    rebuildPath();
+  }
+
+  function buildTrail() {
+    trailSvg.setAttribute("viewBox", `0 0 ${innerWidth} ${innerHeight}`);
+    hikerSvg.setAttribute("viewBox", `0 0 ${innerWidth} ${innerHeight}`);
+    const frac = trailLen > 0 ? walkDist / trailLen : 0;
+    rebuildPath(); // same fractions, new pixel geometry
+    walkDist = frac * trailLen;
+    if (navTarget) {
+      navRemaining = trailLen - walkDist;
+      navSpeed = Math.max(NAV_MIN_SPEED, navRemaining / (NAV_MAX_MS / 1000));
+    }
     renderWalker(0);
   }
 
   function renderWalker(now) {
-    const striding = navTarget && Math.floor(now / 75) % 2 === 0;
+    let jumpY = 0;
+    if (jumpT0 >= 0) {
+      const t = (now - jumpT0) / JUMP_MS;
+      if (t >= 1) jumpT0 = -1;
+      else if (t > 0) {
+        // two hops: full-height bounce, then a small settle bounce
+        const h = t < 0.62
+          ? Math.sin((Math.PI * t) / 0.62) * JUMP_H
+          : Math.sin((Math.PI * (t - 0.62)) / 0.38) * JUMP_H * 0.35;
+        jumpY = Math.round(h) * WALK_U; // whole sprite pixels
+      }
+    }
+    const striding =
+      jumpY > 0 || (navTarget && Math.floor(now / 75) % 2 === 0);
     legsStride.setAttribute("visibility", striding ? "visible" : "hidden");
     legsStand.setAttribute("visibility", striding ? "hidden" : "visible");
     const p = trailPath.getPointAtLength(walkDist);
     walker.setAttribute("transform",
-      `translate(${p.x} ${p.y}) scale(${walkDir * WALK_U} ${WALK_U})`);
+      `translate(${p.x} ${p.y - jumpY}) scale(${facing * WALK_U} ${WALK_U})`);
   }
 
-  // Click-to-navigate: hurry the hiker to a station the short way
-  // round the loop, press the summit marker on arrival, then open
-  // its field report. The hiker stands at a station otherwise.
+  // Click-to-navigate: route the hiker along the trail network,
+  // press the summit marker on arrival, then open its field
+  // report. The hiker stands at a station otherwise.
   function sendHiker(btn, idx) {
-    const s = stationS[idx] ?? 0;
-    const fwd = (s - walkDist + trailLen) % trailLen;
-    const dist = Math.min(fwd, trailLen - fwd);
-    walkDir = fwd <= trailLen - fwd ? 1 : -1;
-    navSpeed = Math.max(NAV_MIN_SPEED, dist / (NAV_MAX_MS / 1000));
-    navRemaining = dist;
-    navTarget = { btn, idx, s };
+    const target = STATION_NODES[idx];
+    let nodes, prefix = null;
+    if (navTarget && trailLen > 0) {
+      // rerouted mid-walk: set off from right here, via whichever
+      // adjacent route node gives the shorter overall trip
+      const p = trailPath.getPointAtLength(walkDist);
+      prefix = [p.x / innerWidth, p.y / innerHeight];
+      let k = 0;
+      while (k + 1 < nodeBreaks.length && nodeBreaks[k + 1] <= walkDist) k++;
+      const back = routeNodes[k];
+      const ahead = routeNodes[Math.min(k + 1, routeNodes.length - 1)];
+      let best = null;
+      for (const c of back === ahead ? [back] : [back, ahead]) {
+        const r = findRoute(c, target);
+        const lead = Math.hypot((NODES[c][0] - prefix[0]) * innerWidth,
+                                (NODES[c][1] - prefix[1]) * innerHeight);
+        if (!best || lead + r.len < best.cost) {
+          best = { cost: lead + r.len, nodes: r.nodes };
+        }
+      }
+      nodes = best.nodes;
+    } else {
+      nodes = findRoute(STATION_NODES[standingIdx], target).nodes;
+    }
+    // face toward the destination for the whole trip, ignoring
+    // local wiggles in the trail (net screen direction of the leg)
+    const fromX = prefix ? prefix[0] : NODES[nodes[0]][0];
+    const dx = (NODES[target][0] - fromX) * innerWidth;
+    if (Math.abs(dx) > 1) facing = dx > 0 ? 1 : -1;
+    setJourney(nodes, prefix);
+    walkDist = 0;
+    navSpeed = Math.max(NAV_MIN_SPEED, trailLen / (NAV_MAX_MS / 1000));
+    navRemaining = trailLen;
+    navTarget = { btn, idx };
+    jumpT0 = -1; // re-routed mid-hop: back to walking
   }
 
-  function arrive() {
+  function arrive(now) {
     const btn = navTarget.btn;
     standingIdx = navTarget.idx;
     navTarget = null;
+    jumpT0 = now; // celebratory hop at the summit
     btn.classList.add("pressed");
     setTimeout(() => {
       btn.classList.remove("pressed");
@@ -601,11 +707,11 @@
     if (navTarget) {
       const step = (navSpeed * dt) / 1000;
       if (step >= navRemaining) {
-        walkDist = navTarget.s;
-        arrive();
+        walkDist = trailLen;
+        arrive(now);
       } else {
         navRemaining -= step;
-        walkDist = (walkDist + walkDir * step + trailLen) % trailLen;
+        walkDist += step;
       }
     }
     renderWalker(now);
