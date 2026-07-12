@@ -297,6 +297,24 @@ a:hover { color: var(--flag); }
   color: var(--bone-dim);
 }
 
+.bar-right { display: flex; align-items: center; gap: 18px; }
+
+.webring { display: flex; align-items: center; gap: 10px; }
+
+.webring a {
+  font-family: var(--font-px);
+  font-size: 12px;
+  line-height: 1;
+  text-decoration: none;
+  color: var(--bone-dim);
+}
+
+.webring a:hover { color: var(--flag); }
+
+.webring img { display: block; width: 20px; height: auto; opacity: 0.75; }
+
+.webring a:hover img { opacity: 1; }
+
 .bar-links { display: flex; gap: 18px; }
 
 .bar-links a {
@@ -471,6 +489,10 @@ a:hover { color: var(--flag); }
   .sheet-ref, .lbl-region { display: none; }
   .lbl-water-sm, .lbl-city-sm, .lbl-park { display: none; }
   .readout { display: none; }
+  .scale-lbl { display: none; }
+  .bar-links { gap: 12px; }
+  .bar-right { gap: 12px; }
+  .webring { gap: 8px; }
   .drawer { right: 12px; bottom: 52px; width: calc(100vw - 24px); }
   .bar { padding: 8px 12px; }
   .site-name { font-size: 14px; }
